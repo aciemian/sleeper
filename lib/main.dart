@@ -31,9 +31,11 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   AudioSession? audioSession;
-  Timer? timer;
+  Timer? sleepTimer;
+  Timer? keepAliveTimer;
   Duration timerDuration = const Duration(seconds: 1);
   Duration sleepDuration = const Duration(minutes: 30);
+  Duration keepAlivePeriod = const Duration(minutes:5);
   bool isActivated = false;
 
   @override
@@ -51,11 +53,12 @@ class _HomePageState extends State<HomePage> {
           contentType: AndroidAudioContentType.music,
           usage: AndroidAudioUsage.media,
         ),
-        androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransient,
+        androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
       ));
       // Listen to audio interruptions and pause or duck as appropriate.
       handleInterruptions();
     });
+    keepAliveTimer = Timer.periodic(keepAlivePeriod, onKeepAliveTimer);
   }
 
   void handleInterruptions() {
@@ -154,7 +157,7 @@ class _HomePageState extends State<HomePage> {
     String text = ' ';
     if ( isActivated ) {
       text = isTimerActive
-          ? 'Music will sleep in ${formatDuration(sleepDuration - (timerDuration * timer!.tick))}'
+          ? 'Music will sleep in ${formatDuration(sleepDuration - (timerDuration * sleepTimer!.tick))}'
           : 'Waiting for music to begin...';
     }
     return Expanded(
@@ -184,7 +187,7 @@ Widget durationSlider() {
 }
 
   void onActivate() {
-    assert(timer == null);
+    assert(sleepTimer == null);
     isActivated = true;
     isAudioPlaying.then((playing) {
       // print('Enabling - ' + (playing ? 'playing' : 'quiet'));
@@ -206,8 +209,8 @@ Widget durationSlider() {
   }
 
   bool get isTimerActive {
-    if (timer == null) return false;
-    return timer!.isActive;
+    if (sleepTimer == null) return false;
+    return sleepTimer!.isActive;
   }
 
   Future<bool> get isAudioPlaying {
@@ -224,13 +227,13 @@ Widget durationSlider() {
 
   void setSleepTimer() {
     // print('Setting timer');
-    timer = Timer.periodic(timerDuration, onTimer);
+    sleepTimer = Timer.periodic(timerDuration, onSleepTimer);
   }
 
   void cancelSleepTimer() {
     // print('Cancelling timer');
-    timer?.cancel();
-    timer = null;
+    sleepTimer?.cancel();
+    sleepTimer = null;
   }
 
   void setAudioFocus(bool set) {
@@ -242,7 +245,7 @@ Widget durationSlider() {
     }
   }
 
-  void onTimer(Timer t) {
+  void onSleepTimer(Timer t) {
     // print('Timer activated');
     setState(() {
       if (sleepDuration < (timerDuration * t.tick)) {
@@ -250,6 +253,14 @@ Widget durationSlider() {
         setAudioFocus(true);
       }
     });
+  }
+
+  Future<void> onKeepAliveTimer(Timer t) async {
+    if (!isActivated) return;
+    if (await isAudioPlaying) return;
+    // Waiting for music to start, temporarily relinquish audio focus
+    setAudioFocus(false);
+    Future.delayed(const Duration(seconds: 1), () => setAudioFocus(true));
   }
 
   String formatDuration(Duration d) {
