@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:system_clock/system_clock.dart';
 
 void main() {
   runApp(const MyApp());
@@ -49,7 +50,7 @@ class _HomePageState extends State<HomePage> {
         ),
       ));
       // Listen to audio interruptions and pause or duck as appropriate.
-      handleInterruptions();
+      // handleInterruptions();
     });
     keepAliveTimer = Timer.periodic(keepAlivePeriod, onKeepAliveTimer);
   }
@@ -181,6 +182,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> onActivate() async {
+    // Duration time = SystemClock.uptime();
+    var downEvent = AndroidKeyEventTest(
+        action: 0,
+        keyCode: 85);
+    // time = SystemClock.uptime();
+    var upEvent = AndroidKeyEventTest(
+        action: 1,
+        keyCode: 85);
+    await AndroidAudioManager().dispatchMediaKeyEvent(downEvent);
+    await AndroidAudioManager().dispatchMediaKeyEvent(upEvent);
+    return;
     assert(sleepTimer == null);
     isActivated = true;
     if (await isAudioPlaying) {
@@ -232,14 +244,15 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> releaseAudioFocus() async {
     // Releases the audio focus while activated
-    // Since the focus was claimed transient, this typically results play resumption 
-    await audioSession?.setActive(false, androidAudioFocusGainType:AndroidAudioFocusGainType.gainTransient);
+    // Since the focus was claimed transient, this typically results play resumption
+    await audioSession?.setActive(false,
+        androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransient);
   }
 
   Future<void> releaseAudioFocusDeactivating() async {
     // Releases the audio focus when deactivating
-    // Since the focus was claimed transient, this typically results play resumption, 
-    //    but the desired result is a focus release without triggering a play resumption. 
+    // Since the focus was claimed transient, this typically results play resumption,
+    //    but the desired result is a focus release without triggering a play resumption.
     // Mute the volume, so play resumption is not heard
     await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.mute,
         AndroidAudioVolumeFlags.removeSoundAndVibrate);
@@ -255,7 +268,8 @@ class _HomePageState extends State<HomePage> {
     await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.unmute,
         AndroidAudioVolumeFlags.removeSoundAndVibrate);
     // Can now release the audio focus without the music resuming
-    await audioSession?.setActive(false, androidAudioFocusGainType:AndroidAudioFocusGainType.gain);
+    await audioSession?.setActive(false,
+        androidAudioFocusGainType: AndroidAudioFocusGainType.gain);
   }
 
   void onSleepTimer(Timer t) {
@@ -268,19 +282,19 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  Future<void> onKeepAliveTimer(Timer t) async {  
+  Future<void> onKeepAliveTimer(Timer t) async {
     if (!isActivated) return;
     if (await isAudioPlaying) return;
     // The sleep timer is activated but is in the waiting state for music to be restarted.
     // This periodic event keeps the music player and this app active and
     //   keeps the music player ready to play when the headset play button is pressed.
-    // Mute the audio 
+    // Mute the audio
     await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.mute,
         AndroidAudioVolumeFlags.removeSoundAndVibrate);
     // Release the transient audio focus to trigger the music to resume
     await releaseAudioFocus();
     await Future.delayed(const Duration(seconds: 1));
-    // Reclaim the transient audio focus to stop the music 
+    // Reclaim the transient audio focus to stop the music
     await claimAudioFocus();
     await Future.delayed(const Duration(seconds: 1));
     // Unmute to return to previous volume setting
@@ -299,4 +313,26 @@ class _HomePageState extends State<HomePage> {
 
     return '$minutesPadding$minutes:$secondsPadding$seconds';
   }
+}
+
+class AndroidKeyEventTest extends AndroidKeyEvent {
+  AndroidKeyEventTest({required int action, required int keyCode})
+      : super(
+            deviceId: 0,
+            source: 0,
+            displayId: 0,
+            metaState: 0,
+            action: action,
+            keyCode: keyCode,
+            scanCode: 0,
+            repeatCount: 0,
+            flags: 0,
+            downTime: 0,
+            eventTime: 0);
+
+  @override
+  Map<String, dynamic> _toMap() => <String, dynamic>{
+        'action': action,
+        'keyCode': keyCode,
+      };
 }
