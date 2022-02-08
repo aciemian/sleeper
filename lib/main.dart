@@ -254,6 +254,8 @@ class _HomePageState extends State<HomePage> {
     // Unmute to return to previous volume setting
     await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.unmute,
         AndroidAudioVolumeFlags.removeSoundAndVibrate);
+    // Can now release the audio focus without the music resuming
+    await audioSession?.setActive(false, androidAudioFocusGainType:AndroidAudioFocusGainType.gain);
   }
 
   void onSleepTimer(Timer t) {
