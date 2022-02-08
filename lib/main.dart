@@ -10,7 +10,6 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
@@ -35,7 +34,7 @@ class _HomePageState extends State<HomePage> {
   Timer? keepAliveTimer;
   Duration timerDuration = const Duration(seconds: 1);
   Duration sleepDuration = const Duration(minutes: 30);
-  Duration keepAlivePeriod = const Duration(minutes:5);
+  Duration keepAlivePeriod = const Duration(minutes: 5);
   bool isActivated = false;
 
   @override
@@ -43,17 +42,11 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     AudioSession.instance.then((session) async {
       audioSession = session;
-      // This line configures the app's audio session, indicating to the OS the
-      // type of audio we intend to play. Using the "speech" recipe rather than
-      // "music" since we are playing a podcast.
       audioSession?.configure(const AudioSessionConfiguration(
-        avAudioSessionCategory: AVAudioSessionCategory.soloAmbient,
-        avAudioSessionMode: AVAudioSessionMode.defaultMode,
         androidAudioAttributes: AndroidAudioAttributes(
           contentType: AndroidAudioContentType.music,
           usage: AndroidAudioUsage.media,
         ),
-        androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
       ));
       // Listen to audio interruptions and pause or duck as appropriate.
       handleInterruptions();
@@ -88,14 +81,10 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void onInterrupt() {
-    isAudioPlaying.then((playing) {
-      if (playing) {
-        setState(() {
-          setSleepTimer();
-        });
-      } else {}
-    });
+  Future<void> onInterrupt() async {
+    if (await isAudioPlaying) {
+      setState(() => setSleepTimer());
+    }
   }
 
   @override
@@ -107,7 +96,6 @@ class _HomePageState extends State<HomePage> {
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 140, 16, 100),
         child: Column(
-          //mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             activateButton(),
@@ -155,68 +143,67 @@ class _HomePageState extends State<HomePage> {
   Widget statusText() {
     const TextStyle style = TextStyle(fontSize: 30);
     String text = ' ';
-    if ( isActivated ) {
+    if (isActivated) {
       text = isTimerActive
           ? 'Music will sleep in ${formatDuration(sleepDuration - (timerDuration * sleepTimer!.tick))}'
           : 'Waiting for music to begin...';
     }
     return Expanded(
-      child: Text( text, 
+      child: Text(
+        text,
         style: style,
       ),
     );
   }
 
+  Widget durationSlider() {
+    const int min = 5;
+    const int max = 60;
+    return Column(
+      children: [
+        Text(
+          'Sleep Duration: ${sleepDuration.inMinutes} minutes',
+          style: const TextStyle(fontSize: 20),
+        ),
+        Slider(
+          value: sleepDuration.inMinutes.toDouble(),
+          min: min.toDouble(),
+          max: max.toDouble(),
+          divisions: (max - min) ~/ min,
+          onChanged: (double value) {
+            setState(() {
+              sleepDuration = Duration(minutes: value.round());
+            });
+          },
+        ),
+      ],
+    );
+  }
 
-Widget durationSlider() {
-  const int min = 5;
-  const int max = 60;
-  return Column(
-    children: [
-      Text( 'Sleep Duration: ${sleepDuration.inMinutes} minutes',
-      style: const TextStyle(fontSize: 20),
-      ),
-      Slider( 
-        value: sleepDuration.inMinutes.toDouble(),
-        min: min.toDouble(),
-        max: max.toDouble(),
-        divisions: (max - min) ~/ min, 
-        onChanged: (double value) {  setState(() {sleepDuration = Duration(minutes: value.round());});},),
-    ],
-  );
-}
-
-  void onActivate() {
+  Future<void> onActivate() async {
     assert(sleepTimer == null);
     isActivated = true;
-    isAudioPlaying.then((playing) {
-      // print('Enabling - ' + (playing ? 'playing' : 'quiet'));
-      setState( () {
-        if (playing) {
-          setSleepTimer();
-        } else {
-          setAudioFocus(true);
-        }
-      });
-    });
+    if (await isAudioPlaying) {
+      // Audio is already active
+      // Initiate the slepp timer
+      setSleepTimer();
+    } else {
+      // Audio is not yet active
+      // Claim audio focus so interrupt notification will be recieved when audio begins
+      claimAudioFocus();
+    }
   }
 
-  void onDeactivate() {
+  Future<void> onDeactivate() async {
     isActivated = false;
-    // print('Disabling');
     cancelSleepTimer();
-    setAudioFocus(false);
-  }
-
-  bool get isTimerActive {
-    if (sleepTimer == null) return false;
-    return sleepTimer!.isActive;
+    if (!await isAudioPlaying) {
+      // If there is no active audio, make sure audio focus is releases
+      releaseAudioFocusDeactivating();
+    }
   }
 
   Future<bool> get isAudioPlaying {
-    // try {
-    //   return AVAudioSession().isOtherAudioPlaying;
-    // } catch ( ex ) {}
     try {
       return AndroidAudioManager().isMusicActive();
     } catch (ex) {
@@ -226,41 +213,77 @@ Widget durationSlider() {
   }
 
   void setSleepTimer() {
-    // print('Setting timer');
     sleepTimer = Timer.periodic(timerDuration, onSleepTimer);
   }
 
   void cancelSleepTimer() {
-    // print('Cancelling timer');
     sleepTimer?.cancel();
     sleepTimer = null;
   }
 
-  void setAudioFocus(bool set) {
-    // print('Setting audios focus - $set');
-    try {
-      audioSession?.setActive(set);
-    } catch (e) {
-      // print('_setAudioFocusException - ${e.toString()}');
-    }
+  bool get isTimerActive {
+    return (sleepTimer != null);
+  }
+
+  Future<void> claimAudioFocus() async {
+    await audioSession?.setActive(true,
+        androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransient);
+  }
+
+  Future<void> releaseAudioFocus() async {
+    // Releases the audio focus while activated
+    // Since the focus was claimed transient, this typically results play resumption 
+    await audioSession?.setActive(false, androidAudioFocusGainType:AndroidAudioFocusGainType.gainTransient);
+  }
+
+  Future<void> releaseAudioFocusDeactivating() async {
+    // Releases the audio focus when deactivating
+    // Since the focus was claimed transient, this typically results play resumption, 
+    //    but the desired result is a focus release without triggering a play resumption. 
+    // Mute the volume, so play resumption is not heard
+    await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.mute,
+        AndroidAudioVolumeFlags.removeSoundAndVibrate);
+    // Release transient focus, play will resume
+    await audioSession?.setActive(false,
+        androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransient);
+    await Future.delayed(const Duration(seconds: 1));
+    // Reclaim permanant focus to cease play
+    await audioSession?.setActive(true,
+        androidAudioFocusGainType: AndroidAudioFocusGainType.gain);
+    await Future.delayed(const Duration(seconds: 2));
+    // Unmute to return to previous volume setting
+    await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.unmute,
+        AndroidAudioVolumeFlags.removeSoundAndVibrate);
   }
 
   void onSleepTimer(Timer t) {
-    // print('Timer activated');
+    // Wake up to check if sleep period has been reached and to update the countdown timer
     setState(() {
       if (sleepDuration < (timerDuration * t.tick)) {
         cancelSleepTimer();
-        setAudioFocus(true);
+        claimAudioFocus();
       }
     });
   }
 
-  Future<void> onKeepAliveTimer(Timer t) async {
+  Future<void> onKeepAliveTimer(Timer t) async {  
     if (!isActivated) return;
     if (await isAudioPlaying) return;
-    // Waiting for music to start, temporarily relinquish audio focus
-    setAudioFocus(false);
-    Future.delayed(const Duration(seconds: 1), () => setAudioFocus(true));
+    // The sleep timer is activated but is in the waiting state for music to be restarted.
+    // This periodic event keeps the music player and this app active and
+    //   keeps the music player ready to play when the headset play button is pressed.
+    // Mute the audio 
+    await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.mute,
+        AndroidAudioVolumeFlags.removeSoundAndVibrate);
+    // Release the transient audio focus to trigger the music to resume
+    await releaseAudioFocus();
+    await Future.delayed(const Duration(seconds: 1));
+    // Reclaim the transient audio focus to stop the music 
+    await claimAudioFocus();
+    await Future.delayed(const Duration(seconds: 1));
+    // Unmute to return to previous volume setting
+    await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.unmute,
+        AndroidAudioVolumeFlags.removeSoundAndVibrate);
   }
 
   String formatDuration(Duration d) {
