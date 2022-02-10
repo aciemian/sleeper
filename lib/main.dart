@@ -180,8 +180,6 @@ class _HomePageState extends State<HomePage> {
   Future<void> onWatchTimer(Timer t) async {
     if (!isActivated) return;
     bool isPlaying = await AndroidAudioManager.isAudioPlaying();
-    setState(
-      () {
         if (isPlaying) {
           // Audio is currently playing
           if (isSleepTimerActive) {
@@ -206,8 +204,7 @@ class _HomePageState extends State<HomePage> {
             resetKeepAlive();
           }
         }
-      },
-    );
+    setState(() {});
   }
 
   Future<void> pausePlayer() async {

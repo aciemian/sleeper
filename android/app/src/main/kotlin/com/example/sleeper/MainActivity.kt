@@ -1,4 +1,4 @@
-package com.example.sleeper
+package com.alanciemian.sleeper
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
