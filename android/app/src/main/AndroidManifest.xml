@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.sleeper">
+    package="com.alanciemian.sleeper">
    <application
-        android:label="sleeper"
+        android:label="Sleeper"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

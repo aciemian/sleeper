@@ -1,8 +1,6 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:audio_session/audio_session.dart';
-import 'package:system_clock/system_clock.dart';
+import 'audio_manager.dart';
 
 void main() {
   runApp(const MyApp());
@@ -30,62 +28,19 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  AudioSession? audioSession;
-  Timer? sleepTimer;
-  Timer? keepAliveTimer;
-  Duration timerDuration = const Duration(seconds: 1);
+  bool isActivated = false;
+  bool isMotivating = false;
+  DateTime? sleepTriggered;
+  Timer? watchTimer;
+  Duration watchPeriod = const Duration(seconds: 1);
   Duration sleepDuration = const Duration(minutes: 30);
   Duration keepAlivePeriod = const Duration(minutes: 5);
-  bool isActivated = false;
+  DateTime lastKeepAlive = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    AudioSession.instance.then((session) async {
-      audioSession = session;
-      audioSession?.configure(const AudioSessionConfiguration(
-        androidAudioAttributes: AndroidAudioAttributes(
-          contentType: AndroidAudioContentType.music,
-          usage: AndroidAudioUsage.media,
-        ),
-      ));
-      // Listen to audio interruptions and pause or duck as appropriate.
-      // handleInterruptions();
-    });
-    keepAliveTimer = Timer.periodic(keepAlivePeriod, onKeepAliveTimer);
-  }
-
-  void handleInterruptions() {
-    audioSession?.interruptionEventStream.listen((event) {
-      // print('interruption begin: ${event.begin}');
-      // print('interruption type: ${event.type}');
-      if (event.begin) {
-        switch (event.type) {
-          case AudioInterruptionType.duck:
-            break;
-          case AudioInterruptionType.pause:
-            break;
-          case AudioInterruptionType.unknown:
-            onInterrupt();
-            break;
-        }
-      } else {
-        switch (event.type) {
-          case AudioInterruptionType.duck:
-            break;
-          case AudioInterruptionType.pause:
-            break;
-          case AudioInterruptionType.unknown:
-            break;
-        }
-      }
-    });
-  }
-
-  Future<void> onInterrupt() async {
-    if (await isAudioPlaying) {
-      setState(() => setSleepTimer());
-    }
+    watchTimer = Timer.periodic(watchPeriod, onWatchTimer);
   }
 
   @override
@@ -95,17 +50,17 @@ class _HomePageState extends State<HomePage> {
         title: const Text('Sleeper'),
       ),
       body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 140, 16, 100),
+        padding: const EdgeInsets.fromLTRB(16, 100, 16, 100),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             activateButton(),
             const SizedBox(
-              height: 160,
+              height: 100,
             ),
             statusText(),
             const SizedBox(
-              height: 160,
+              height: 100,
             ),
             durationSlider(),
           ],
@@ -145,8 +100,8 @@ class _HomePageState extends State<HomePage> {
     const TextStyle style = TextStyle(fontSize: 30);
     String text = ' ';
     if (isActivated) {
-      text = isTimerActive
-          ? 'Music will sleep in ${formatDuration(sleepDuration - (timerDuration * sleepTimer!.tick))}'
+      text = isSleepTimerActive
+          ? 'Music will sleep in ${formatDuration(sleepTimeRemaining)}'
           : 'Waiting for music to begin...';
     }
     return Expanded(
@@ -182,124 +137,101 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> onActivate() async {
-    // Duration time = SystemClock.uptime();
-    var downEvent = AndroidKeyEventTest(
-        action: 0,
-        keyCode: 85);
-    // time = SystemClock.uptime();
-    var upEvent = AndroidKeyEventTest(
-        action: 1,
-        keyCode: 85);
-    await AndroidAudioManager().dispatchMediaKeyEvent(downEvent);
-    await AndroidAudioManager().dispatchMediaKeyEvent(upEvent);
-    return;
-    assert(sleepTimer == null);
+    assert(!isActivated);
     isActivated = true;
-    if (await isAudioPlaying) {
-      // Audio is already active
-      // Initiate the slepp timer
-      setSleepTimer();
-    } else {
-      // Audio is not yet active
-      // Claim audio focus so interrupt notification will be recieved when audio begins
-      claimAudioFocus();
-    }
+    resetKeepAlive();
   }
 
   Future<void> onDeactivate() async {
     isActivated = false;
     cancelSleepTimer();
-    if (!await isAudioPlaying) {
-      // If there is no active audio, make sure audio focus is releases
-      releaseAudioFocusDeactivating();
-    }
-  }
-
-  Future<bool> get isAudioPlaying {
-    try {
-      return AndroidAudioManager().isMusicActive();
-    } catch (ex) {
-      // Ignore
-    }
-    return Future.value(false);
   }
 
   void setSleepTimer() {
-    sleepTimer = Timer.periodic(timerDuration, onSleepTimer);
+    sleepTriggered = DateTime.now();
   }
 
   void cancelSleepTimer() {
-    sleepTimer?.cancel();
-    sleepTimer = null;
+    sleepTriggered = null;
   }
 
-  bool get isTimerActive {
-    return (sleepTimer != null);
+  bool get isSleepTimerActive {
+    return (sleepTriggered != null);
   }
 
-  Future<void> claimAudioFocus() async {
-    await audioSession?.setActive(true,
-        androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransient);
+  Duration get sleepTimeRemaining {
+    assert(isSleepTimerActive);
+    return sleepDuration - (DateTime.now().difference(sleepTriggered!));
   }
 
-  Future<void> releaseAudioFocus() async {
-    // Releases the audio focus while activated
-    // Since the focus was claimed transient, this typically results play resumption
-    await audioSession?.setActive(false,
-        androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransient);
+  bool get isSleepTimeElapsed {
+    assert(isSleepTimerActive);
+    return sleepTriggered!.add(sleepDuration).isBefore(DateTime.now());
   }
 
-  Future<void> releaseAudioFocusDeactivating() async {
-    // Releases the audio focus when deactivating
-    // Since the focus was claimed transient, this typically results play resumption,
-    //    but the desired result is a focus release without triggering a play resumption.
-    // Mute the volume, so play resumption is not heard
-    await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.mute,
-        AndroidAudioVolumeFlags.removeSoundAndVibrate);
-    // Release transient focus, play will resume
-    await audioSession?.setActive(false,
-        androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransient);
-    await Future.delayed(const Duration(seconds: 1));
-    // Reclaim permanant focus to cease play
-    await audioSession?.setActive(true,
-        androidAudioFocusGainType: AndroidAudioFocusGainType.gain);
-    await Future.delayed(const Duration(seconds: 2));
-    // Unmute to return to previous volume setting
-    await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.unmute,
-        AndroidAudioVolumeFlags.removeSoundAndVibrate);
-    // Can now release the audio focus without the music resuming
-    await audioSession?.setActive(false,
-        androidAudioFocusGainType: AndroidAudioFocusGainType.gain);
+  void resetKeepAlive() {
+    lastKeepAlive = DateTime.now();
   }
 
-  void onSleepTimer(Timer t) {
-    // Wake up to check if sleep period has been reached and to update the countdown timer
-    setState(() {
-      if (sleepDuration < (timerDuration * t.tick)) {
-        cancelSleepTimer();
-        claimAudioFocus();
-      }
-    });
+  bool get isKeepAliveElapsed {
+    return lastKeepAlive.add(keepAlivePeriod).isBefore(DateTime.now());
   }
 
-  Future<void> onKeepAliveTimer(Timer t) async {
+  Future<void> onWatchTimer(Timer t) async {
     if (!isActivated) return;
-    if (await isAudioPlaying) return;
-    // The sleep timer is activated but is in the waiting state for music to be restarted.
-    // This periodic event keeps the music player and this app active and
-    //   keeps the music player ready to play when the headset play button is pressed.
-    // Mute the audio
-    await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.mute,
-        AndroidAudioVolumeFlags.removeSoundAndVibrate);
-    // Release the transient audio focus to trigger the music to resume
-    await releaseAudioFocus();
-    await Future.delayed(const Duration(seconds: 1));
-    // Reclaim the transient audio focus to stop the music
-    await claimAudioFocus();
-    await Future.delayed(const Duration(seconds: 1));
-    // Unmute to return to previous volume setting
-    await AndroidAudioManager().adjustVolume(AndroidAudioAdjustment.unmute,
-        AndroidAudioVolumeFlags.removeSoundAndVibrate);
+    bool isPlaying = await AndroidAudioManager.isAudioPlaying();
+    setState(
+      () {
+        if (isPlaying) {
+          // Audio is currently playing
+          if (isSleepTimerActive) {
+            // Sleep timer is active
+            if (isSleepTimeElapsed) {
+              // Pause the audio and clear the sleep timer
+              pausePlayer();
+              cancelSleepTimer();
+              // Start the keep alive process from 
+              resetKeepAlive();
+            } else {
+              // Keep waiting
+            }
+          } else if (!isMotivating) {
+            // Audio has started proper, restart the sleep timer
+            setSleepTimer();
+          }
+        } else {
+          // Audio is not playing, keep the player motivated if keep alive period has expired
+          if ( isKeepAliveElapsed ) {
+            motivatePlayer();
+            resetKeepAlive();
+          }
+        }
+      },
+    );
+  }
+
+  Future<void> pausePlayer() async {
+    await AndroidAudioManager.simulateMediaKey(AndroidAudioManager.keyPause);
+  }
+
+  Future<void> motivatePlayer() async {
+    isMotivating = true;
+    try {
+      // Trigger the player to keep it listening for headset commands
+      // Mute the audio
+      await AndroidAudioManager.muteVolume(true);
+      // Briefly restart the player
+      await AndroidAudioManager.simulateMediaKey(
+          AndroidAudioManager.keyPlay);
+      await Future.delayed(const Duration(milliseconds: 500));
+      await AndroidAudioManager.simulateMediaKey(
+          AndroidAudioManager.keyPause);
+      // Unmute to return to previous volume setting
+      await Future.delayed(const Duration(milliseconds: 500));
+      await AndroidAudioManager.muteVolume(false);
+    } finally {
+      isMotivating = false;
+    }
   }
 
   String formatDuration(Duration d) {
@@ -313,26 +245,4 @@ class _HomePageState extends State<HomePage> {
 
     return '$minutesPadding$minutes:$secondsPadding$seconds';
   }
-}
-
-class AndroidKeyEventTest extends AndroidKeyEvent {
-  AndroidKeyEventTest({required int action, required int keyCode})
-      : super(
-            deviceId: 0,
-            source: 0,
-            displayId: 0,
-            metaState: 0,
-            action: action,
-            keyCode: keyCode,
-            scanCode: 0,
-            repeatCount: 0,
-            flags: 0,
-            downTime: 0,
-            eventTime: 0);
-
-  @override
-  Map<String, dynamic> _toMap() => <String, dynamic>{
-        'action': action,
-        'keyCode': keyCode,
-      };
 }

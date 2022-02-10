@@ -8,13 +8,6 @@ packages:
       url: "https://pub.dartlang.org"
     source: hosted
     version: "2.8.2"
-  audio_session:
-    dependency: "direct main"
-    description:
-      name: audio_session
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "0.1.6+1"
   boolean_selector:
     dependency: transitive
     description:
@@ -50,13 +43,6 @@ packages:
       url: "https://pub.dartlang.org"
     source: hosted
     version: "1.15.0"
-  cupertino_icons:
-    dependency: "direct main"
-    description:
-      name: cupertino_icons
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "1.0.4"
   fake_async:
     dependency: transitive
     description:
@@ -81,18 +67,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_web_plugins:
-    dependency: transitive
-    description: flutter
-    source: sdk
-    version: "0.0.0"
-  js:
-    dependency: transitive
-    description:
-      name: js
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "0.6.3"
   lints:
     dependency: transitive
     description:
@@ -128,13 +102,6 @@ packages:
       url: "https://pub.dartlang.org"
     source: hosted
     version: "1.8.0"
-  rxdart:
-    dependency: transitive
-    description:
-      name: rxdart
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "0.27.3"
   sky_engine:
     dependency: transitive
     description: flutter
@@ -168,13 +135,6 @@ packages:
       url: "https://pub.dartlang.org"
     source: hosted
     version: "1.1.0"
-  system_clock:
-    dependency: "direct main"
-    description:
-      name: system_clock
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "1.2.0"
   term_glyph:
     dependency: transitive
     description:
@@ -205,4 +165,3 @@ packages:
     version: "2.1.1"
 sdks:
   dart: ">=2.15.1 <3.0.0"
-  flutter: ">=1.20.0"
