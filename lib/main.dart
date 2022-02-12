@@ -29,7 +29,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool isActivated = false;
-  bool isMotivating = false;
   DateTime? sleepTriggered;
   Timer? watchTimer;
   Duration watchPeriod = const Duration(seconds: 1);
@@ -193,7 +192,7 @@ class _HomePageState extends State<HomePage> {
             } else {
               // Keep waiting
             }
-          } else if (!isMotivating) {
+          } else {
             // Audio has started proper, restart the sleep timer
             setSleepTimer();
           }
@@ -212,23 +211,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> motivatePlayer() async {
-    isMotivating = true;
-    try {
-      // Trigger the player to keep it listening for headset commands
-      // Mute the audio
-      await AndroidAudioManager.muteVolume(true);
-      // Briefly restart the player
-      await AndroidAudioManager.simulateMediaKey(
-          AndroidAudioManager.keyPlay);
-      await Future.delayed(const Duration(milliseconds: 500));
-      await AndroidAudioManager.simulateMediaKey(
-          AndroidAudioManager.keyPause);
-      // Unmute to return to previous volume setting
-      await Future.delayed(const Duration(milliseconds: 500));
-      await AndroidAudioManager.muteVolume(false);
-    } finally {
-      isMotivating = false;
-    }
+    // Simulating a media key press seems to be enough to keep player happy
+    await AndroidAudioManager.simulateMediaKey(
+        AndroidAudioManager.keyPause);
   }
 
   String formatDuration(Duration d) {
