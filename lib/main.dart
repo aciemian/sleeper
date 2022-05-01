@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'audio_manager.dart';
 
 void main() {
@@ -29,7 +30,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool isActivated = false;
-  DateTime? sleepTriggered;
+  DateTime? sleepTrigger;
   Timer? watchTimer;
   Duration watchPeriod = const Duration(seconds: 1);
   Duration sleepDuration = const Duration(minutes: 30);
@@ -39,6 +40,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    loadPrefs();
     watchTimer = Timer.periodic(watchPeriod, onWatchTimer);
   }
 
@@ -128,6 +130,7 @@ class _HomePageState extends State<HomePage> {
           onChanged: (double value) {
             setState(() {
               sleepDuration = Duration(minutes: value.round());
+              savePrefs();
             });
           },
         ),
@@ -135,37 +138,42 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> onActivate() async {
+  void onActivate() {
     assert(!isActivated);
     isActivated = true;
     resetKeepAlive();
   }
 
-  Future<void> onDeactivate() async {
+  void onDeactivate() {
     isActivated = false;
     cancelSleepTimer();
   }
 
   void setSleepTimer() {
-    sleepTriggered = DateTime.now();
+    sleepTrigger = DateTime.now().add(sleepDuration);
   }
 
   void cancelSleepTimer() {
-    sleepTriggered = null;
+    sleepTrigger = null;
   }
 
   bool get isSleepTimerActive {
-    return (sleepTriggered != null);
+    return (sleepTrigger != null);
   }
 
   Duration get sleepTimeRemaining {
     assert(isSleepTimerActive);
-    return sleepDuration - (DateTime.now().difference(sleepTriggered!));
+    assert(sleepTrigger != null);
+    final now = DateTime.now();
+    return now.isBefore(sleepTrigger!)
+        ? sleepTrigger!.difference(now)
+        : const Duration();
   }
 
   bool get isSleepTimeElapsed {
     assert(isSleepTimerActive);
-    return sleepTriggered!.add(sleepDuration).isBefore(DateTime.now());
+    assert(sleepTrigger != null);
+    return sleepTrigger!.isBefore(DateTime.now());
   }
 
   void resetKeepAlive() {
@@ -176,33 +184,61 @@ class _HomePageState extends State<HomePage> {
     return lastKeepAlive.add(keepAlivePeriod).isBefore(DateTime.now());
   }
 
+  Future<void> onWatchTimerX(Timer t) async {
+    if (!isActivated) return;
+    bool isPlaying = await AndroidAudioManager.isAudioPlaying();
+    if (isPlaying) {
+      // Audio is currently playing
+      if (isSleepTimerActive) {
+        // Sleep timer is active
+        if (isSleepTimeElapsed) {
+          // Pause the audio and clear the sleep timer
+          pausePlayer();
+          cancelSleepTimer();
+          // Start the keep alive process from
+          resetKeepAlive();
+        } else {
+          // Keep waiting
+        }
+      } else {
+        // Audio has started proper, restart the sleep timer
+        setSleepTimer();
+      }
+    } else {
+      // Audio is not playing, keep the player motivated if keep alive period has expired
+      if (isKeepAliveElapsed) {
+        motivatePlayer();
+        resetKeepAlive();
+      }
+    }
+    setState(() {});
+  }
+
   Future<void> onWatchTimer(Timer t) async {
     if (!isActivated) return;
     bool isPlaying = await AndroidAudioManager.isAudioPlaying();
-        if (isPlaying) {
-          // Audio is currently playing
-          if (isSleepTimerActive) {
-            // Sleep timer is active
-            if (isSleepTimeElapsed) {
-              // Pause the audio and clear the sleep timer
-              pausePlayer();
-              cancelSleepTimer();
-              // Start the keep alive process from 
-              resetKeepAlive();
-            } else {
-              // Keep waiting
-            }
-          } else {
-            // Audio has started proper, restart the sleep timer
-            setSleepTimer();
-          }
-        } else {
-          // Audio is not playing, keep the player motivated if keep alive period has expired
-          if ( isKeepAliveElapsed ) {
-            motivatePlayer();
-            resetKeepAlive();
-          }
-        }
+    // If timer has elapsed, pause the audio and clear the sleep timer
+    if (isSleepTimerActive && isSleepTimeElapsed) {
+      pausePlayer();
+      isPlaying = false;
+    }
+    // Check status of player
+    if (isPlaying) {
+      // Audio is currently playing
+      if (!isSleepTimerActive) {
+        // Audio has started proper, restart the sleep timer
+        setSleepTimer();
+      }
+    } else {
+      // Audio is not playing
+      // Reset the sleep timer
+      cancelSleepTimer();
+      // Keep the player motivated if keep alive period has expired
+      if (isKeepAliveElapsed) {
+        motivatePlayer();
+        resetKeepAlive();
+      }
+    }
     setState(() {});
   }
 
@@ -212,8 +248,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> motivatePlayer() async {
     // Simulating a media key press seems to be enough to keep player happy
-    await AndroidAudioManager.simulateMediaKey(
-        AndroidAudioManager.keyPause);
+    await AndroidAudioManager.simulateMediaKey(AndroidAudioManager.keyPause);
   }
 
   String formatDuration(Duration d) {
@@ -226,5 +261,18 @@ class _HomePageState extends State<HomePage> {
     var secondsPadding = seconds < 10 ? "0" : "";
 
     return '$minutesPadding$minutes:$secondsPadding$seconds';
+  }
+
+  void loadPrefs() {
+    SharedPreferences.getInstance().then((prefs) {
+      sleepDuration =
+          Duration(minutes: prefs.getInt('sleep') ?? sleepDuration.inMinutes);
+      setState(() {});
+    });
+  }
+
+  void savePrefs() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setInt('sleep', sleepDuration.inMinutes);
   }
 }
