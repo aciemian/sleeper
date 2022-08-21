@@ -1,10 +1,18 @@
+import 'dart:isolate';
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'audio_manager.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:sleeper/sleep_state.dart';
+import 'package:sleeper/sleeper_task.dart';
+import 'package:sleeper/sleep_manager.dart';
 
 void main() {
   runApp(const MyApp());
+}
+
+void startCallback() {
+  FlutterForegroundTask.setTaskHandler(SleeperTaskHandler());
 }
 
 class MyApp extends StatelessWidget {
@@ -29,42 +37,123 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  bool isActivated = false;
-  DateTime? sleepTrigger;
-  Timer? watchTimer;
-  Duration watchPeriod = const Duration(seconds: 1);
-  Duration sleepDuration = const Duration(minutes: 30);
-  Duration keepAlivePeriod = const Duration(minutes: 5);
-  DateTime lastKeepAlive = DateTime.now();
+  ReceivePort? _receivePort;
+  final SleepState _sleepState = SleepState.load();
+  bool isActive = false;
 
   @override
   void initState() {
     super.initState();
-    loadPrefs();
-    watchTimer = Timer.periodic(watchPeriod, onWatchTimer);
+    _initForegroundTask();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // You can get the previous ReceivePort without restarting the service.
+      if (await FlutterForegroundTask.isRunningService) {
+        final newReceivePort = await FlutterForegroundTask.receivePort;
+        _registerReceivePort(newReceivePort);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    onDeactivate();
+    _closeReceivePort();
+    super.dispose();
+  }
+
+  Future<bool> _startSleeperTask() async {
+        bool reqResult;
+    if (await FlutterForegroundTask.isRunningService) {
+      reqResult = await FlutterForegroundTask.restartService();
+    } else {
+      reqResult = await FlutterForegroundTask.startService(
+        notificationTitle: 'Sleep timer is running...',
+        notificationText: '',
+        callback: startCallback,
+      );
+    }
+
+    ReceivePort? receivePort;
+    if (reqResult) {
+      receivePort = await FlutterForegroundTask.receivePort;
+    }
+
+    return _registerReceivePort(receivePort);
+  }
+
+  Future<bool> _stopSleeperTask() async {
+    return FlutterForegroundTask.stopService();
+  }
+
+  bool _registerReceivePort(ReceivePort? receivePort) {
+    _closeReceivePort();
+
+    if (receivePort == null) return false;
+
+    _receivePort = receivePort;
+    _receivePort!.listen(_listenOnReceivePort);
+    /*
+      _receivePort?.listen((message) {
+        if (message is DateTime) {
+          print('timestamp: ${message.toString()}');
+        } else if (message is String) {
+          if (message == 'onNotificationPressed') {
+            Navigator.of(context).pushNamed('/resume-route');
+          }
+        }
+      });
+      */
+
+    return true;
+  }
+
+  void _listenOnReceivePort(dynamic message) {
+    assert(message is String);
+    String event = message as String;
+    switch (event) {
+      case 'onStart':
+        SleepManager.onStart(_sleepState);
+        break;
+      case 'onEvent':
+        SleepManager.onTick(_sleepState);
+        FlutterForegroundTask.updateService(notificationText: 'Time Remaining: ${formatDuration(_sleepState.sleepTimeRemaining)}');
+        break;
+      case 'onDestroy':
+        _sleepState.cancel();
+        break;
+    }
+    setState(() { });
+    _sleepState.save();
+  }
+
+  void _closeReceivePort() {
+    _receivePort?.close();
+    _receivePort = null;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sleeper'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 100, 16, 100),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            activateButton(),
-            const SizedBox(
-              height: 100,
-            ),
-            statusText(),
-            const SizedBox(
-              height: 100,
-            ),
-            durationSlider(),
-          ],
+    return WithForegroundTask(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Sleeper'),
+        ),
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 100, 16, 100),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              activateButton(),
+              const SizedBox(
+                height: 100,
+              ),
+              statusText(),
+              const SizedBox(
+                height: 100,
+              ),
+              durationSlider(),
+            ],
+          ),
         ),
       ),
     );
@@ -74,7 +163,7 @@ class _HomePageState extends State<HomePage> {
     String buttonText = '';
     Color buttonColor;
 
-    if (isActivated) {
+    if (isActive) {
       buttonText = 'Deactivate';
       buttonColor = Colors.red;
     } else {
@@ -91,7 +180,7 @@ class _HomePageState extends State<HomePage> {
           ),
           onPressed: () {
             setState(() {
-              isActivated ? onDeactivate() : onActivate();
+              isActive ? onDeactivate() : onActivate();
             });
           }),
     );
@@ -100,9 +189,9 @@ class _HomePageState extends State<HomePage> {
   Widget statusText() {
     const TextStyle style = TextStyle(fontSize: 30);
     String text = ' ';
-    if (isActivated) {
-      text = isSleepTimerActive
-          ? 'Music will sleep in ${formatDuration(sleepTimeRemaining)}'
+    if (isActive) {
+      text = _sleepState.isSleepTimerActive
+          ? 'Music will sleep in ${formatDuration(_sleepState.sleepTimeRemaining)}'
           : 'Waiting for music to begin...';
     }
     return Expanded(
@@ -114,23 +203,25 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget durationSlider() {
-    const int min = 5;
-    const int max = 60;
+    const double durMin = 1;
+    const double durMax = 30;
+    double value = _sleepState.sleepDuration.inMinutes.toDouble();
+
     return Column(
       children: [
         Text(
-          'Sleep Duration: ${sleepDuration.inMinutes} minutes',
+          'Sleep Duration: ${_sleepState.sleepDuration.inMinutes} minutes',
           style: const TextStyle(fontSize: 20),
         ),
         Slider(
-          value: sleepDuration.inMinutes.toDouble(),
-          min: min.toDouble(),
-          max: max.toDouble(),
-          divisions: (max - min) ~/ min,
+          value: max(min(value, durMax), durMin),
+          min: durMin,
+          max: durMax,
+          divisions: (durMax - durMin) ~/ durMin,
           onChanged: (double value) {
             setState(() {
-              sleepDuration = Duration(minutes: value.round());
-              savePrefs();
+              _sleepState.sleepDuration = Duration(minutes: value.round());
+              _sleepState.save();
             });
           },
         ),
@@ -139,116 +230,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   void onActivate() {
-    assert(!isActivated);
-    isActivated = true;
-    resetKeepAlive();
+    assert(!isActive);
+    _startSleeperTask().then((started) => isActive = started);
   }
 
   void onDeactivate() {
-    isActivated = false;
-    cancelSleepTimer();
-  }
-
-  void setSleepTimer() {
-    sleepTrigger = DateTime.now().add(sleepDuration);
-  }
-
-  void cancelSleepTimer() {
-    sleepTrigger = null;
-  }
-
-  bool get isSleepTimerActive {
-    return (sleepTrigger != null);
-  }
-
-  Duration get sleepTimeRemaining {
-    assert(isSleepTimerActive);
-    assert(sleepTrigger != null);
-    final now = DateTime.now();
-    return now.isBefore(sleepTrigger!)
-        ? sleepTrigger!.difference(now)
-        : const Duration();
-  }
-
-  bool get isSleepTimeElapsed {
-    assert(isSleepTimerActive);
-    assert(sleepTrigger != null);
-    return sleepTrigger!.isBefore(DateTime.now());
-  }
-
-  void resetKeepAlive() {
-    lastKeepAlive = DateTime.now();
-  }
-
-  bool get isKeepAliveElapsed {
-    return lastKeepAlive.add(keepAlivePeriod).isBefore(DateTime.now());
-  }
-
-  Future<void> onWatchTimerX(Timer t) async {
-    if (!isActivated) return;
-    bool isPlaying = await AndroidAudioManager.isAudioPlaying();
-    if (isPlaying) {
-      // Audio is currently playing
-      if (isSleepTimerActive) {
-        // Sleep timer is active
-        if (isSleepTimeElapsed) {
-          // Pause the audio and clear the sleep timer
-          pausePlayer();
-          cancelSleepTimer();
-          // Start the keep alive process from
-          resetKeepAlive();
-        } else {
-          // Keep waiting
-        }
-      } else {
-        // Audio has started proper, restart the sleep timer
-        setSleepTimer();
-      }
-    } else {
-      // Audio is not playing, keep the player motivated if keep alive period has expired
-      if (isKeepAliveElapsed) {
-        motivatePlayer();
-        resetKeepAlive();
-      }
-    }
-    setState(() {});
-  }
-
-  Future<void> onWatchTimer(Timer t) async {
-    if (!isActivated) return;
-    bool isPlaying = await AndroidAudioManager.isAudioPlaying();
-    // If timer has elapsed, pause the audio and clear the sleep timer
-    if (isSleepTimerActive && isSleepTimeElapsed) {
-      pausePlayer();
-      isPlaying = false;
-    }
-    // Check status of player
-    if (isPlaying) {
-      // Audio is currently playing
-      if (!isSleepTimerActive) {
-        // Audio has started proper, restart the sleep timer
-        setSleepTimer();
-      }
-    } else {
-      // Audio is not playing
-      // Reset the sleep timer
-      cancelSleepTimer();
-      // Keep the player motivated if keep alive period has expired
-      if (isKeepAliveElapsed) {
-        motivatePlayer();
-        resetKeepAlive();
-      }
-    }
-    setState(() {});
-  }
-
-  Future<void> pausePlayer() async {
-    await AndroidAudioManager.simulateMediaKey(AndroidAudioManager.keyPause);
-  }
-
-  Future<void> motivatePlayer() async {
-    // Simulating a media key press seems to be enough to keep player happy
-    await AndroidAudioManager.simulateMediaKey(AndroidAudioManager.keyPause);
+    isActive = false;
+    _stopSleeperTask();
   }
 
   String formatDuration(Duration d) {
@@ -263,16 +251,26 @@ class _HomePageState extends State<HomePage> {
     return '$minutesPadding$minutes:$secondsPadding$seconds';
   }
 
-  void loadPrefs() {
-    SharedPreferences.getInstance().then((prefs) {
-      sleepDuration =
-          Duration(minutes: prefs.getInt('sleep') ?? sleepDuration.inMinutes);
-      setState(() {});
-    });
-  }
-
-  void savePrefs() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    prefs.setInt('sleep', sleepDuration.inMinutes);
+  Future<void> _initForegroundTask() async {
+    await FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'Sleeper ID',
+        channelName: 'Sleeper Name',
+        channelDescription: 'Sleeper Description.',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+        enableVibration: false,
+        iconData: null,
+        buttons: [
+          const NotificationButton(id: 'button', text: 'Button'),
+        ],
+      ),
+      foregroundTaskOptions: const ForegroundTaskOptions(
+        interval: 1000,
+        autoRunOnBoot: false,
+        allowWifiLock: false,
+      ),
+      printDevLog: true,
+    );
   }
 }
