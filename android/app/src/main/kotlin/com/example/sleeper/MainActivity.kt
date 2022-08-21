@@ -9,44 +9,44 @@ import io.flutter.plugin.common.MethodChannel.Result
 import androidx.annotation.NonNull
 import android.content.Context
 import android.media.AudioManager
-import android.view.KeyEvent
+
 
 
 class MainActivity: FlutterActivity(), MethodCallHandler {
   private val CHANNEL = "com.alanciemian/sleeper"
-  private var audioManager: AudioManager? =  null
 
   override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
     super.configureFlutterEngine(flutterEngine)
     MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler( this )
-    audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
   }
 
+  
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
-    if ( call.method == "isAudioPlaying" ) {
-      val isPlaying = isAudioPlaying()
-      result.success(isPlaying)
-    } else if ( call.method == "muteVolume" ) {
-      muteVolume( call.arguments as Boolean )
-      result.success( null )
-    } else if ( call.method == "simulateMediaKey" ) {
-      simulateMediaKey( call.arguments as Int )
-      result.success( null )
-    } else {
-      result.notImplemented()
-    }
+    when (call.method) {
+      "startService" -> {
+        val args = call.arguments as List<Int>
+        val sleep = args[0]
+        val keepAlive = args[1]
+        result.success(startService(sleep, keepAlive))
+      }
+      "stopService" -> {
+        result.success(stopService())
+      }
+      else -> {
+        result.notImplemented()
+      }
+     }
   }
     
-  private fun isAudioPlaying(): Boolean {
-    return audioManager!!.isMusicActive()
+  private fun startService( sleep: Int, keepAlive: Int ): Boolean {
+    val state = SleepState( sleep, keepAlive )
+    val audioService = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    return true
   }
 
-  private fun muteVolume( mute: Boolean ) {
-    audioManager!!.adjustVolume( if (mute) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE, AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE )
+  private fun stopService(): Boolean {
+    return true
   }
 
-  private fun simulateMediaKey( keyCode: Int ) {
-    audioManager!!.dispatchMediaKeyEvent( KeyEvent(KeyEvent.ACTION_DOWN, keyCode) )
-    audioManager!!.dispatchMediaKeyEvent( KeyEvent(KeyEvent.ACTION_UP, keyCode) )
-  }
 }
