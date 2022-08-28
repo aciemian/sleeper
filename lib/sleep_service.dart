@@ -1,13 +1,15 @@
 import 'package:flutter/services.dart';
 
+import 'sleep_state.dart';
+
 
 class SleepService {
 
-  static const platform = MethodChannel('com.alanciemian/sleeper');
+  static const platform = MethodChannel('com.alanciemian.sleeper');
 
-  static Future<bool> start( Duration sleepDuration, Duration keepAliveDuration ) async {
+  static Future<bool> start( SleepState state ) async {
     try {
-      var arguments = [sleepDuration.inMinutes, keepAliveDuration.inMinutes];
+      var arguments = [state.sleepDuration.inMinutes, state.keepAlivePeriod.inMinutes];
       final bool result = await platform.invokeMethod('startService', arguments);
       return Future.value(result);
     } on PlatformException {

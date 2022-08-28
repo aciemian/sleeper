@@ -7,26 +7,25 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import androidx.annotation.NonNull
-import android.content.Context
-import android.media.AudioManager
-
+import android.util.Log
 
 
 class MainActivity: FlutterActivity(), MethodCallHandler {
-  private val CHANNEL = "com.alanciemian/sleeper"
+  private val channel = "com.alanciemian.sleeper"
 
   override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
+    Log.d("TAG", "configure")
     super.configureFlutterEngine(flutterEngine)
-    MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler( this )
+    MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel).setMethodCallHandler( this )
   }
 
   
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
     when (call.method) {
       "startService" -> {
-        val args = call.arguments as List<Int>
-        val sleep = args[0]
-        val keepAlive = args[1]
+        val args = call.arguments as List<*>
+        val sleep = args[0] as Int
+        val keepAlive = args[1] as Int
         result.success(startService(sleep, keepAlive))
       }
       "stopService" -> {
@@ -40,12 +39,14 @@ class MainActivity: FlutterActivity(), MethodCallHandler {
     
   private fun startService( sleep: Int, keepAlive: Int ): Boolean {
     val state = SleepState( sleep, keepAlive )
-    val audioService = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
+    SleepService.stopService(this)
+    SleepService.startService(this, sleep, keepAlive)
     return true
   }
 
   private fun stopService(): Boolean {
+    SleepService.stopService(this)
     return true
   }
 

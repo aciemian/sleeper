@@ -2,7 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class SleepState {
   Duration keepAlivePeriod = const Duration(minutes: 5);
-  Duration sleepDuration = const Duration(minutes: 1);
+  Duration sleepDuration = const Duration(minutes: 30);
 
   SleepState.load() {
     SharedPreferences.getInstance().then((prefs) {
