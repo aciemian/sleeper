@@ -155,7 +155,6 @@ class SleepService : Service() {
 
     companion object {
         var timer : Timer? = null
-        val deleteReceiver = DeleteReceiver()
 
         fun startService(context: Context, sleep: Int, keepAlive: Int) {
             assert( timer == null )
@@ -186,15 +185,15 @@ class SleepService : Service() {
         val notificationBuilder = createNotificationBuilder()
         startForeground(1, notificationBuilder.build())
 
-        val params = intent!!.getIntArrayExtra("params")
-        val state = SleepState(params!![0], params!![1])
+        val params = intent!!.getIntArrayExtra("params")!!
+        val state = SleepState(params[0], params[1])
         val manager = SleepManager(getSystemService(Context.AUDIO_SERVICE) as AudioManager, state)
         val notificationManager= getSystemService(NotificationManager::class.java) as NotificationManager
         val task = SleepTask(manager, notificationManager, notificationBuilder)
         manager.onStart()
-        timer?.schedule(task, 0, 1000 )
+        timer?.schedule(task, 0, 1000)
 
-        return START_STICKY
+        return START_REDELIVER_INTENT
     }
 
     override fun onBind(intent: Intent): IBinder? {
@@ -226,11 +225,12 @@ class SleepService : Service() {
             registerReceiver(deleteReceiver, IntentFilter("NOTIFICATION_DELETED"))
         return Notification.Builder(this, channelID)
             .setCategory(Notification.CATEGORY_SERVICE)
-            .setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle("Sleeper")
+            .setSmallIcon(R.drawable.ic_snooze)
+            //.setContentTitle("Sleeper")
             .setContentText("")
             .setContentIntent(contentIntent)
             .setDeleteIntent(deleteIntent)
+            .setShowWhen(false)
             .setOngoing(false)
     }
 }

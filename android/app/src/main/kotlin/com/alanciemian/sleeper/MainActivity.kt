@@ -14,7 +14,6 @@ class MainActivity: FlutterActivity(), MethodCallHandler {
   private val channel = "com.alanciemian.sleeper"
 
   override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
-    Log.d("TAG", "configure")
     super.configureFlutterEngine(flutterEngine)
     MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel).setMethodCallHandler( this )
   }
@@ -38,8 +37,6 @@ class MainActivity: FlutterActivity(), MethodCallHandler {
   }
     
   private fun startService( sleep: Int, keepAlive: Int ): Boolean {
-    val state = SleepState( sleep, keepAlive )
-
     SleepService.stopService(this)
     SleepService.startService(this, sleep, keepAlive)
     return true

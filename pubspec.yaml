@@ -31,7 +31,11 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.0.13
+  flutter_launcher_icons: ^0.10.0
 
+flutter_icons:
+  android: "launcher_snooze"
+  image_path: "assets/snooze_launcher.png"
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -48,6 +52,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^1.0.0
 
+ 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
