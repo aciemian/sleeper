@@ -29,7 +29,18 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final SleepState _sleepState = SleepState.load();
+  final SleepState _sleepState = SleepState();
+
+  @override
+  void initState() {
+    super.initState();
+    _sleepState.load();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,23 +48,29 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('Sleeper'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            durationSlider(),
-            activateButton(),
-          ],
-        ),
-      ),
+      body: StreamBuilder<SleepState>(
+          stream: _sleepState.states.stream,
+          builder: (context, snapshot) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  durationSlider(snapshot.hasData
+                      ? snapshot.data!.sleepDuration.inMinutes
+                      : _sleepState.sleepDuration.inMinutes),
+                  activateButton(),
+                ],
+              ),
+            );
+          }),
     );
   }
 
-  Widget durationSlider() {
+  Widget durationSlider(int minutes) {
     const double durMin = 5;
     const double durMax = 60;
-    double value = _sleepState.sleepDuration.inMinutes.toDouble();
+    double value = minutes.toDouble();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -61,7 +78,7 @@ class _HomePageState extends State<HomePage> {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
           child: Text(
-            'Sleep Duration: ${_sleepState.sleepDuration.inMinutes} minutes',
+            'Sleep Duration: $minutes minutes',
             style: const TextStyle(fontSize: 24),
           ),
         ),
@@ -71,10 +88,8 @@ class _HomePageState extends State<HomePage> {
           max: durMax,
           divisions: (durMax - durMin) ~/ durMin,
           onChanged: (double value) {
-            setState(() {
-              _sleepState.sleepDuration = Duration(minutes: value.round());
-              _sleepState.save();
-            });
+            _sleepState.sleepDuration = Duration(minutes: value.round());
+            _sleepState.save();
           },
         ),
       ],
@@ -85,16 +100,15 @@ class _HomePageState extends State<HomePage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 0, 0),
       child: ElevatedButton(
-          child: const Text('Activate'),
-          style: ButtonStyle(
-            backgroundColor: MaterialStateProperty.all(Colors.green),
-            textStyle: MaterialStateProperty.all(const TextStyle(fontSize: 24)),
-          ),
-          onPressed: () {
-            setState(() {
-              onActivate();
-            });
-          }),
+        child: const Text('Activate'),
+        style: ButtonStyle(
+          backgroundColor: MaterialStateProperty.all(Colors.green),
+          textStyle: MaterialStateProperty.all(const TextStyle(fontSize: 24)),
+        ),
+        onPressed: () {
+          onActivate();
+        },
+      ),
     );
   }
 
