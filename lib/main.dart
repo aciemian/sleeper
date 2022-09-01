@@ -56,9 +56,12 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  durationSlider(snapshot.hasData
+                  sleepDurationWidget(snapshot.hasData
                       ? snapshot.data!.sleepDuration.inMinutes
                       : _sleepState.sleepDuration.inMinutes),
+                  keepAlivePeriodWidget(snapshot.hasData
+                      ? snapshot.data!.keepAlivePeriod.inMinutes
+                      : _sleepState.keepAlivePeriod.inMinutes),
                   activateButton(),
                 ],
               ),
@@ -67,7 +70,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget durationSlider(int minutes) {
+  Widget sleepDurationWidget(int minutes) {
     const double durMin = 5;
     const double durMax = 60;
     double value = minutes.toDouble();
@@ -76,7 +79,7 @@ class _HomePageState extends State<HomePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
           child: Text(
             'Sleep Duration: $minutes minutes',
             style: const TextStyle(fontSize: 24),
@@ -95,6 +98,36 @@ class _HomePageState extends State<HomePage> {
       ],
     );
   }
+
+  Widget keepAlivePeriodWidget(int minutes) {
+    const double durMin = 0;
+    const double durMax = 60;
+    double value = minutes.toDouble();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
+          child: Text(
+            'Keep Alive Period: $minutes minutes',
+            style: const TextStyle(fontSize: 24),
+          ),
+        ),
+        Slider(
+          value: max(min(value, durMax), durMin),
+          min: durMin,
+          max: durMax,
+          divisions: (durMax - durMin) ~/ 5,
+          onChanged: (double value) {
+            _sleepState.keepAlivePeriod = Duration(minutes: value.round());
+            _sleepState.save();
+          },
+        ),
+      ],
+    );
+  }
+
 
   Widget activateButton() {
     return Padding(

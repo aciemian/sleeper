@@ -42,8 +42,7 @@ class SleepState(sleepMin: Int, keepAliveMin: Int) {
 
     val isKeepAliveElapsed: Boolean
         get() {
-            assert(lastKeepAlive != null)
-            return lastKeepAlive?.plus(keepAliveDuration)?.isBefore(LocalDateTime.now()) ?: true
+            return lastKeepAlive?.plus(keepAliveDuration)?.isBefore(LocalDateTime.now()) ?: false
         }
 
     fun start() {
@@ -55,7 +54,9 @@ class SleepState(sleepMin: Int, keepAliveMin: Int) {
     }
 
     fun resetKeepAlive() {
-        lastKeepAlive = LocalDateTime.now()
+        if (0 < keepAliveDuration.toMinutes()) { 
+            lastKeepAlive = LocalDateTime.now()
+        }
     }
 }
 
