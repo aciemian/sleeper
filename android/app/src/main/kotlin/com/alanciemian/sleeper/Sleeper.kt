@@ -216,10 +216,10 @@ class SleepService : Service() {
     private fun createNotificationBuilder():Notification.Builder {
         createNotificationChannel()
         val contentIntent = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE + Intent.FLAG_ACTIVITY_NEW_TASK)
         val deleteIntent = PendingIntent.getBroadcast(
             this, 0, Intent("NOTIFICATION_DELETED"), PendingIntent.FLAG_IMMUTABLE)
-            registerReceiver(deleteReceiver, IntentFilter("NOTIFICATION_DELETED"))
+        registerReceiver(deleteReceiver, IntentFilter("NOTIFICATION_DELETED"))
 
         val action = Notification.Action.Builder(null, "Cancel", deleteIntent).build()
         return Notification.Builder(this, channelID)

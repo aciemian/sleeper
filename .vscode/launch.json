@@ -11,6 +11,13 @@
             "program": "lib/main.dart",
             "request": "launch",
             "type": "dart"
+        },
+        {
+            "name": "Flutter (Pixel 7)",
+            "program": "lib/main.dart",
+            "deviceId": "28011FDH2004FE",
+            "request": "launch",
+            "type": "dart"
         }
     ]
 }
