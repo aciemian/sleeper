@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:sleeper/sleep_service.dart';
 import 'package:sleeper/sleep_state.dart';
 
@@ -62,7 +63,7 @@ class _HomePageState extends State<HomePage> {
                   keepAlivePeriodWidget(snapshot.hasData
                       ? snapshot.data!.keepAlivePeriod.inMinutes
                       : _sleepState.keepAlivePeriod.inMinutes),
-                  activateButton(),
+                  buttons(),
                 ],
               ),
             );
@@ -128,12 +129,19 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget buttons() {
+    return Row(
+        children:[
+          activateButton(),
+          deactivateButton(),
+        ]
+    );
+  }
 
   Widget activateButton() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 0, 0),
       child: ElevatedButton(
-        child: const Text('Activate'),
         style: ButtonStyle(
           backgroundColor: MaterialStateProperty.all(Colors.green),
           textStyle: MaterialStateProperty.all(const TextStyle(fontSize: 24)),
@@ -141,11 +149,34 @@ class _HomePageState extends State<HomePage> {
         onPressed: () {
           onActivate();
         },
+        child: const Text('Activate'),
       ),
     );
   }
 
-  void onActivate() {
+  Widget deactivateButton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 0, 0),
+      child: ElevatedButton(
+        style: ButtonStyle(
+          backgroundColor: MaterialStateProperty.all(Colors.green),
+          textStyle: MaterialStateProperty.all(const TextStyle(fontSize: 24)),
+        ),
+        onPressed: () {
+          onDeactivate();
+        },
+        child: const Text('Deactivate'),
+      ),
+    );
+  }
+
+  void onActivate()  {
     SleepService.start(_sleepState);
+    SystemNavigator.pop();
+  }
+
+  void onDeactivate()  {
+    SleepService.stop();
+    SystemNavigator.pop();
   }
 }

@@ -219,18 +219,18 @@ class SleepService : Service() {
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val deleteIntent = PendingIntent.getBroadcast(
             this, 0, Intent("NOTIFICATION_DELETED"), PendingIntent.FLAG_IMMUTABLE)
-            registerReceiver(deleteReceiver, IntentFilter("NOTIFICATION_DELETED"))
+        registerReceiver(deleteReceiver, IntentFilter("NOTIFICATION_DELETED"))
 
-        val action = Notification.Action.Builder(null, "Cancel", deleteIntent).build()
+        //val action = Notification.Action.Builder(null, "Cancel", deleteIntent).build()
         return Notification.Builder(this, channelID)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setSmallIcon(R.drawable.ic_snooze)
             .setContentText("")
             .setContentIntent(contentIntent)
             .setDeleteIntent(deleteIntent)
-            .addAction(action)
+            //.addAction(action)
             .setShowWhen(false)
-            .setOngoing(true)
+            .setOngoing(false)
     }
 }
 
