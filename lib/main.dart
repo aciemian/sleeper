@@ -172,7 +172,7 @@ class _HomePageState extends State<HomePage> {
 
   void onActivate()  {
     SleepService.start(_sleepState);
-    //SystemNavigator.pop();
+    SystemNavigator.pop();
   }
 
   void onDeactivate()  {
