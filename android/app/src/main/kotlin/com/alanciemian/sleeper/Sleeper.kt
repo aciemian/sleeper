@@ -230,7 +230,7 @@ class SleepService : Service() {
             .setDeleteIntent(deleteIntent)
             //.addAction(action)
             .setShowWhen(false)
-            .setOngoing(false)
+            .setOngoing(true)
     }
 }
 
