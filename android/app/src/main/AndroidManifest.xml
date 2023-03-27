@@ -34,6 +34,7 @@
         <service
             android:name="com.alanciemian.sleeper.SleepService"
             android:foregroundServiceType="mediaPlayback"
+            android:process=":SleepServiceProcess"
             />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
